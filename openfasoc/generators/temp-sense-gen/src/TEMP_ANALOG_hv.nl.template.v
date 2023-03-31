@@ -26,8 +26,12 @@ counter async_counter_0(
 );
 
 (* keep *)
-@@ @nf a_header_@nh(.VIN(VIN));
-SLC
-@@ @no a_buffer_0 (.A(lc_0), .nbout(lc_out));
+
+% for i in range(3):
+${header} a_header_${i}(.VIN(VIN));
+% endfor
+
+SLC a_lc_0(.IN(out), .INB(outb), .VOUT(lc_0));
+${buf} a_buffer_0 (.A(lc_0), .${nbout}(lc_out));
 
 endmodule
