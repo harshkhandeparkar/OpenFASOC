@@ -1,3 +1,7 @@
+<%
+	def cell(name):
+		return cell_prefix + name + cell_postfix
+%>
 module TEMP_ANALOG_hv
 (
 input CLK_REF,
@@ -32,6 +36,6 @@ ${header} a_header_${i}(.VIN(VIN));
 % endfor
 
 SLC a_lc_0(.IN(out), .INB(outb), .VOUT(lc_0));
-${buf} a_buffer_0 (.A(lc_0), .${nbout}(lc_out));
+${cell('buf')} a_buffer_0 (.A(lc_0), .${nbout}(lc_out));
 
 endmodule
