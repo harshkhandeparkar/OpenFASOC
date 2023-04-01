@@ -15,7 +15,8 @@ from mako_template import generate_temp_sense_verilog
 genDir = os.path.join(os.path.dirname(os.path.relpath(__file__)), "../")
 srcDir = genDir + "src/"
 flowDir = genDir + "flow/"
-designDir = flowDir + "design/src/tempsense/"
+flowSrcDir = flowDir + "design/src/tempsense/"
+designDir = genDir + "designs/src/tempsense/"
 simDir = genDir + "simulations/"
 commonDir = genDir + "../../common/"
 platformDir = genDir + "../../common/platforms/" + args.platform + "/"
@@ -116,9 +117,9 @@ elif args.platform == "sky130hs":
 
 ninv = ninv + 1
 
-generate_temp_sense_verilog(srcDir, designDir)
+generate_temp_sense_verilog(srcDir, flowSrcDir)
 
-with open(designDir + "TEMP_ANALOG_hv.nl.v", "r") as rf:
+with open(flowSrcDir + "TEMP_ANALOG_hv.nl.v", "r") as rf:
     filedata = rf.read()
 
 header_list = re.findall("HEADER\s+(\w+)\(", filedata)
@@ -127,7 +128,7 @@ with open(genDir + "blocks/sky130hd/tempsenseInst_custom_net.txt", "w") as wf:
     for header_cell in header_list:
         wf.write("temp_analog_1." + header_cell + " VIN\n")
 
-with open(designDir + "TEMP_ANALOG_lv.nl.v", "r") as rf:
+with open(flowSrcDir + "TEMP_ANALOG_lv.nl.v", "r") as rf:
     filedata = rf.read()
 
 lv_list = re.findall("\nsky130_fd_sc\w*\s+(\w+)\s+\(", filedata)
