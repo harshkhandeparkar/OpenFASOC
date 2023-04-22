@@ -252,7 +252,7 @@ header_var = [int(nhead)]
 
 # make a temp list, TODO: get from JSON config
 temp_start = -20
-temp_stop = 100
+temp_stop = 40
 temp_step = 20
 temp_points = int((temp_stop - temp_start) / temp_step)
 temp_list = []

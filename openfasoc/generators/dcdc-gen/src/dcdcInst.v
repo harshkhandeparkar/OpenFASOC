@@ -56,21 +56,21 @@ module dcdcInst (
 	);
 
 	// Clock Gate
-	sky130_fd_sc_hs__dlclkp_1 u_DCDC_CLKGATE(
+	sky130_fd_sc_hd__dlclkp_1 u_DCDC_CLKGATE(
 		.CLK(clk),
 		.GATE(comp_out),
 		.GCLK(clk_gate_out)
 	);
 
 	// Sync FF
-	sky130_fd_sc_hs__dfxtp_1 u_DCDC_FF(
+	sky130_fd_sc_hd__dfxtp_1 u_DCDC_FF(
 		.CLK(clk_gate_out), //check which input is clk
 		.D(FF_out_inv),
 		.Q(FF_out)
 	);
 
 	// Sync Inv
-	sky130_fd_sc_hs__inv_1 u_DCDC_INVERTER(
+	sky130_fd_sc_hd__inv_1 u_DCDC_INVERTER(
 		.A(FF_out),
 		.Y(FF_out_inv)
 	);
