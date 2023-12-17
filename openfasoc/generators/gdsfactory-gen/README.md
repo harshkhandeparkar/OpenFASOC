@@ -10,7 +10,7 @@ Glayout is a Python package consisting of a GDSFactory-based layout automation t
   - [Generic Rules](#generic-rules)
   - [Creating a MappedPDK](#creating-a-mappedpdk)
 - [Layout Generators](#layout-generators)
-  - [Via Stack Generator](#via-stack-generator)
+  - [Generator Structure](#generator-structure)
   - [Routing](#routing)
   - [PDK Agnostic Hierarchical Cells](#pdk-agnostic-hierarchical-cells)
     - [Example 1: via\_array](#example-1-via_array)
@@ -71,7 +71,7 @@ The PDK generic circuit generator programs (also known as cells) are Python func
 There are only two absolute requirements for drawing a layout: a set of drawing layers, and a set of design rules governing the geometric dimensions between layers. All CMOS technologies must satisfy these two requirements. A `MappedPDK` object contains this information in a standardized format with "generic layers" and "generic rules."
 
 #### Generic Layers
-Almost all CMOS technologies have some version of basically the same layers, some of which are: **active/diffusion**, **metal contact**, **metal 1**,**via1**, etc. The layer description format of `tuple(integer, integer)` is standard. The idea of a generic layer is to map the standard layer names to the corresponding `tuple(integer, integer)` of the particular technology.
+Almost all CMOS technologies have some version of basically the same layers, some of which are: **active/diffusion**, **metal contact**, **metal 1**,**via1**, etc. The layer description format of `tuple(integer, integer)` is standard. The idea of a generic layer (also called "glayers") is to map the standard layer names to the corresponding `tuple(integer, integer)` of the particular technology.
 
 #####  Example Generic Layer Mappings
 | Generic Layer Name | sky130 | gf180 |
@@ -162,21 +162,43 @@ Glayout exports layout generators (known as “cell factories”, but also refer
 ##### Example Designs
 - Two Stage Operational Amplifier
 
-#### Via Stack Generator
-The only stand alone cell (cell factory which does not call other cell factories) in the Glayout package is the via stack. Cell factories generally follow a similar programming procedure, so via stack provides a good introduction to the cell factory structure.
-Like all cells, via stack takes as the first argument a MappedPDK object. There are two other required arguments which specify the generic layers to create the via stack between; the order in which these “glayers” (another name for generic layers) are provided does not matter. There are also several optional arguments providing more specific layout control. To explain this cell, the following function call will be assumed:
-`via_stack(GF180_MappedPDK, “active”, “metal 3”)` OR  `via_stack(GF180_MappedPDK, “metal 3”, “active”)`
-Most cells start by running layer error checking. The via stack must verify that the provided MappedPDK contains both glayers provided and both glayers provided can be routed between. For example, it is usually not possible to route from “nwell” without an “n+s/d” implant, so if one of the layers provided is “nwell”, via stack raises an exception. Additionally, via stack must verify that all layers in between the provided glayers are available in the pdk. In this case, the required glayers are: “active”, “metal contact”, “metal 1”, “via 1”, “metal 2”, via 2”, and “metal 3”. For the passed MappedPDK (GF180), all required glayers are present, but in the case that a glayer is not present, via stack raises an exception.
-layer error checking is done with [`pdk.has_required_glayers(glayers_list)`](https://github.com/alibillalhammoud/OpenFASOC/blob/main/openfasoc/generators/gdsfactory-gen/glayout/pdk/mappedpdk.py#L142).
-The via stack then loops through these layers, placing them one at a time. To legally size and place each layer, via stack must consider “min_enclosure” and “width” rules for vias and metals. For example, to lay the “active” layer, the “metal contact” “width” and the “metal contact” to “active” “min_enclosure” rules must be considered. To lay the “metal 1” layer, the “min_enclosure” and “width” rules of both the via above and the via below “metal 1” must be considered. The programmer of the generic cells must consider all relevant rules to produce a legal layout. Rules are accessed in cell code using the `MappedPDK.get_grule` method.
+#### Generator Structure
+The only stand alone cell (does not call other cell factories) in the Glayout package is the [**Via stack**](./glayout/primitives/via_gen.py#L93). Cell factories generally follow a similar programming procedure, so the Via stack provides a good introduction to the cell factory structure.
+
+Like all cells, Via stack takes as the first argument a `MappedPDK` object. The next two arguments specify the generic layers to create the via stack between; the order does not matter. Several optional arguments are also accepted providing more specific layout control.
+
+Consider the following call to the Via stack generator:
+```py
+from glayout.primitives.via_gen import via_stack
+from glayout.pdk.gf180_mapped import gf180_mapped_pdk
+
+via_stack(gf180_mapped_pdk, "active", "metal 3")
+# OR, equivalently
+via_stack(gf180_mapped_pdk, "metal 3", "active")
+```
+##### Layer Error Checking
+Most cells start by running layer error checking. The via stack gemerator must verify that the provided `MappedPDK` contains both the required glayers and can be routed between. For example, it is usually not possible to route from `nwell` without an `n+s/d` implant, so if one of the layers provided is `nwell`, via stack raises an exception. Additionally, the generator must verify that all layers in between the provided glayers are available in the PDK. In the above example, the required glayers are: `active`, `metal contact`, `metal 1`, `via 1`, `metal 2`, `via 2`, and `metal 3`. For the passed MappedPDK (GF180), all required glayers are present, but in the case that a glayer is not present, an exception is raised.
+
+Layer error checking is using the `MappedPDK.has_required_glayers()` function.
+
+##### Placement
+The via stack generator then iterates through these layers, placing them one at a time. To legally size and place each layer, the `min_enclosure` and `width` rules for via and metal layers are considered. For example, to lay the **active** layer, the **metal contact** `width` and the **metal contact** to **active** `min_enclosure` rules must be considered.
+
+The programmer of the cell factory must consider all relevant rules to produce a legal layout. Rules are accessed in cell code using the `MappedPDK.get_grule()` method.
 
 #### Routing
-Routing utilities are required to create complicated hierarchical designs. At the backend of routing is the gdsfactory “Port” object. Fundamentally, ports describe a polygon edge. Ports include center, width, and orientation of the edge, along with other attributes and utility methods. The glayout routing functions operate to create paths between ports.
-As described with the via stack example above, the checks and sizings necessary for legal layout are executed in the cell generator. Glayout routing functions do not need to understand cell context; for this reason, routing functions are called “dumb routes”. There are three “dumb route” utilities: straight route, L route, and C route. Dumb routes are simple, but contain optional arguments which allow for precise control over created paths. The default path behavior is easy to predict and will generally make the most reasonable decisions if no direction is provided.
-For example, Straight route creates a straight path directly between two ports. If the two provided ports are not collinear or have different orientations, the function will by default route from the first port to the imaginary line stretching perpendicularly from the second port. By default, the route will begin on the same layer as the first port and will lay a via stack if necessary at the second port. If two ports are parallel, Straight route will raise an exception.
+Routing utilities are required to create hierarchical designs. At the backend of routing is the `Port` class exported by GDSFactory. Fundamentally, ports describe a polygon edge by specifying the center, width, and orientation of the edge, along with other attributes and utility methods. The Glayout routing functions operate to create paths between ports. The following routing generators are exported:
+- **Straight Route**: Creates a straight route between two ports.
+- **L Route**: Creates an L-shaped route between two perpendicularly oriented ports.
+- **C Route**: Creates a C-shaped route between two ports (two parallel paths connected by a straight path).
 
-**Straight Route Default Behavoir:**
+As described with the Via stack [example](#generator-structure) above, the checks and sizings necessary for legal layout are executed in the cell generator. Glayout routing functions do not need to understand cell context; for this reason, routing functions are called “dumb routes”. Dumb routes are simple, but contain optional arguments which allow for precise control over created paths. The default path behavior is easy to predict and will generally make the most reasonable decisions if no direction is provided.
+
+For example, straight route creates a straight path directly between two ports. If the two provided ports are not collinear or have different orientations, the function will by default route from the first port to the imaginary line stretching perpendicularly from the second port (as illustrated in the figure below). By default, the route will begin on the same layer as the first port and will lay a via stack if necessary at the second port. If two ports are parallel, Straight route will raise an exception.
+
 ![straight route default behavoir](docs/straight_route_def_beh.png)
+
+(Fig: Straight route default behaviour)
 
 L route and C route also create simple paths. L route creates an L shaped route (two straight paths perpendicular) and C route creates a C shaped route (two parallel paths connected by a straight path).
 
@@ -312,5 +334,3 @@ This section provides a high-level overview of all functions in glayout. See **d
         - print_rules.py
         - snap_to_grid.py
         - component_array_create.py
-
-
