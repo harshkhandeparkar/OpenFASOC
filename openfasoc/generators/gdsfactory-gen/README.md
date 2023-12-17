@@ -39,7 +39,28 @@ Glayout is a Python package consisting of a GDSFactory-based layout automation t
     - Install klive and when prompted, select "run macros."
 - Run `python3 -m pip install -r requirements.txt` in the `gdsfactory-gen`` directory.
 
-#### About Glayout
+#### Using Glayout
+Glayout is structured as a Python package in the `gdsfactory-gen/glayout` directory. The following submodules are exported by the package:
+- `glayout.pdk`: Exports the [`MappedPDK`](#mappedpdk) class and the `MappedPDK` objects for Sky130 and GF180 PDKs.
+- `glayout.primitives`: Exports primitive [cell generators](#layout-generators) such as FET, Guardring, and MiM Capacitor.
+- `glayout.routing`: Exports [routing utilities](#routing).
+- `glayout.components`: Exports intermediate PCell generators such as Differential Pair, and an example two-stage Op-Amp generator.
+
+The following is an example usage code from the [`example.py`](./example.py) file.
+```py
+# Import the NMOS generator
+from glayout.primitives.fet import nmos
+# Import the Sky130 MappedPDK
+from glayout.pdk.sky130_mapped import sky130_mapped_pdk
+
+# Generate the component
+component = nmos(sky130_mapped_pdk)
+
+# Save the component in a .gds file
+component.write_gds('example.gds')
+```
+
+### About Glayout
 Glayout, being a generic layout automation tool, does not require an installed PDK, just a generic PDK description. Glayout is composed of 2 main parts: the generic PDK framework (`MappedPDK`) and the circuit generators.
 
 The generic PDK framework allows for describing any PDK in a standardized format. The `pdk` sub-package within Glayout contains all code for the generic PDK class, `MappedPDK` in addition to instances of `MappedPDK` for the [Sky130](https://skywater-pdk.readthedocs.io/en/main/) and [GF180](https://gf180mcu-pdk.readthedocs.io/en/latest/) PDKs. Because `MappedPDK` is a python class, describing a technology with a `MappedPDK` allows for passing the PDK as a Python object.
@@ -142,7 +163,7 @@ Glayout exports layout generators (known as “cell factories”, but also refer
 - Two Stage Operational Amplifier
 
 #### Via Stack Generator
-The only stand alone cell (cell factory which does not call other cell factories) in the glayout package is the via stack. Cell factories generally follow a similar programming procedure, so via stack provides a good introduction to the cell factory structure.
+The only stand alone cell (cell factory which does not call other cell factories) in the Glayout package is the via stack. Cell factories generally follow a similar programming procedure, so via stack provides a good introduction to the cell factory structure.
 Like all cells, via stack takes as the first argument a MappedPDK object. There are two other required arguments which specify the generic layers to create the via stack between; the order in which these “glayers” (another name for generic layers) are provided does not matter. There are also several optional arguments providing more specific layout control. To explain this cell, the following function call will be assumed:
 `via_stack(GF180_MappedPDK, “active”, “metal 3”)` OR  `via_stack(GF180_MappedPDK, “metal 3”, “active”)`
 Most cells start by running layer error checking. The via stack must verify that the provided MappedPDK contains both glayers provided and both glayers provided can be routed between. For example, it is usually not possible to route from “nwell” without an “n+s/d” implant, so if one of the layers provided is “nwell”, via stack raises an exception. Additionally, via stack must verify that all layers in between the provided glayers are available in the pdk. In this case, the required glayers are: “active”, “metal contact”, “metal 1”, “via 1”, “metal 2”, via 2”, and “metal 3”. For the passed MappedPDK (GF180), all required glayers are present, but in the case that a glayer is not present, via stack raises an exception.
