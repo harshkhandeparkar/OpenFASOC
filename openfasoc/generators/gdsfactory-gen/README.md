@@ -3,13 +3,13 @@ Glayout is a Python package consisting of a GDSFactory-based layout automation t
 
 ### Table of Contents
 - [Example Jupyter Notebook](../../../docs/source/notebooks/glayout/glayout_opamp.ipynb)
-- [Getting Started](#getting_start)
+- [Getting Started](#getting-started)
 - [About Glayout](#about-glayout)
 - [MappedPDK](#mappedpdk)
   - [Generic Layers](#generic-layers)
-  - [Generic Rules](#generic-rule-guide)
+  - [Generic Rules](#generic-rules)
   - [Creating a MappedPDK](#creating-a-mappedpdk)
-- [PDK Agnostic Layout, Basics](#pdk-agnostic-layout-basics)
+- [Layout Generators](#layout-generators)
   - [Via Stack Generator](#via-stack-generator)
   - [Routing](#routing)
   - [PDK Agnostic Hierarchical Cells](#pdk-agnostic-hierarchical-cells)
@@ -96,14 +96,51 @@ pdk.get_grule("metal 2")
 ```
 
 #### Creating a MappedPDK
-To create a MappedPDK for an arbitrary technology, the generic layer mapping and the rule deck must be provided. MappedPDK stores generic layers as a python dictionary; the keys are generic layer names and the values are tuple(int, int) layers. Keys must be one of the generic layers listed in the class variable MappedPDK.valid_glayers; this class variable is an attribute which belongs to the MappedPDK type rather than an individual instance of MappedPDK so it should not be modified.
-It is up to the programmer to decide which technology layer should be used for each generic layer. For example, the Skywater 130nm technology provides a layer called “local interconnect” which is a Titanium Nitride layer used for local routing. Local interconnect has similar (on order of magnitude) conductivity to the metal layers. The glayout provided sky130 MappedPDK object maps: the generic “metal 1” to the sky130 local interconnect layer, the generic “metal contact” to the sky130 local interconnect contact layer, and the generic “via 1” to the sky130 metal contact layer. Progressing up the BEOL, the sky130 MappedPDK generic metals are actually 1 metal ahead of the real layers that are being used; for example, the generic “metal 2” is actually the sky130 metal 1 layer.
-Because there are less than 20 generic layers, MappedPDK requires the programmer to manually define the generic layer python map and pass it to the constructor. However, the generic rules are much more numerous. Glayout provides a utility tool to assist in creating the MappedPDK rule deck. There is a spreadsheet to rule representation conversion program which assists with this.
+To create a `MappedPDK` object for a given technology, the generic layer mapping and the rule deck must be provided.
 
-### PDK Agnostic Layout, Basics
-The python layout generators (known as “cell factories”, but sometimes referred to as “cells” or "components" or "component factories") are built on the MappedPDK framework. All cell factories should have the `@cell` decorator which can be imported with
-`from gdsfactory.cell import cell`
-The MappedPDK.get_glayer and MappedPDK.get_grule methods enable the construction of DRC clean layouts programmatically. However, it is the responsibility of the Cell factory programmer to ensure that the proper rules and layer checks are executed. **The quality of the programmer is the quality of the cell.**
+##### Defining the Layers
+`MappedPDK` stores generic layers as a Python dictionary with the keys being generic layer names and the values being `tuple(int, int)` layers. Keys must be one of following, listed in the class variable `MappedPDK.valid_glayers`:
+- `dnwell` (Deep n-well), `pwell`, `nwell` (p and n wells)
+- `p+s/d`, `n+s/d` (High doping regions)
+- `active_diff` (Transistor active region), `active_tap` (Well tap regions)
+- `poly` (Polysilicon layer)
+- `mcon` (Metal contact)
+- `met1`, `met2`, `met3`, `met4`, `met5` (Metal stack)
+- `via1`, `via2`, `via3`, `via4` (Via stack)
+- `capmet` (Capacitor metal)
+
+It is up to the programmer to decide which technology layer should be used for each generic layer. For example, the Skywater 130nm technology provides a layer called “local interconnect” (`li`) which is a Titanium Nitride layer used for local routing and has conductivity similar to that of the metal layers. The Glayout provided Sky130 MappedPDK object maps as follows:
+
+|Generic Layer|Sky130 Layer|
+|-------------|------------|
+|`met1` (Metal 1) | `li` (Local interconnect)|
+|`mcon` (Metal contact) | `licon` (Local interconnect contact)|
+|`via1` (Via 1) | `mcon` (Metal contact)|
+
+##### Defining the Rule Deck
+Glayout provides a utility tool to assist in creating the `MappedPDK` rule deck. There is a spreadsheet to rule representation conversion program which assists with this.
+
+### Layout Generators
+Glayout exports layout generators (known as “cell factories”, but also referred to as “cells” or "components") in the form of Python functions that take as arguments a `MappedPDK` object and a set of optional layout parameters and return a chip layout. The `MappedPDK.get_glayer()` and `MappedPDK.get_grule()` methods enable the construction of DRC clean layouts programmatically. However, it is the responsibility of the Cell factory programmer to ensure that the proper rules and layer checks are executed.
+
+#### List of Generators
+##### Utility Generators
+- Via
+- Guardring
+- Routing (Straight, L, and C)
+
+##### PCell Generators
+- Primitive Cells
+  - FET (NMOS, PMOS)
+  - MIM Capacitor
+- Intermediate PCells
+  - Differential Pair
+  - Current Mirror
+  - Differential to Single Ended Converter
+
+##### Example Designs
+- Two Stage Operational Amplifier
+
 #### Via Stack Generator
 The only stand alone cell (cell factory which does not call other cell factories) in the glayout package is the via stack. Cell factories generally follow a similar programming procedure, so via stack provides a good introduction to the cell factory structure.
 Like all cells, via stack takes as the first argument a MappedPDK object. There are two other required arguments which specify the generic layers to create the via stack between; the order in which these “glayers” (another name for generic layers) are provided does not matter. There are also several optional arguments providing more specific layout control. To explain this cell, the following function call will be assumed:
@@ -111,6 +148,7 @@ Like all cells, via stack takes as the first argument a MappedPDK object. There 
 Most cells start by running layer error checking. The via stack must verify that the provided MappedPDK contains both glayers provided and both glayers provided can be routed between. For example, it is usually not possible to route from “nwell” without an “n+s/d” implant, so if one of the layers provided is “nwell”, via stack raises an exception. Additionally, via stack must verify that all layers in between the provided glayers are available in the pdk. In this case, the required glayers are: “active”, “metal contact”, “metal 1”, “via 1”, “metal 2”, via 2”, and “metal 3”. For the passed MappedPDK (GF180), all required glayers are present, but in the case that a glayer is not present, via stack raises an exception.
 layer error checking is done with [`pdk.has_required_glayers(glayers_list)`](https://github.com/alibillalhammoud/OpenFASOC/blob/main/openfasoc/generators/gdsfactory-gen/glayout/pdk/mappedpdk.py#L142).
 The via stack then loops through these layers, placing them one at a time. To legally size and place each layer, via stack must consider “min_enclosure” and “width” rules for vias and metals. For example, to lay the “active” layer, the “metal contact” “width” and the “metal contact” to “active” “min_enclosure” rules must be considered. To lay the “metal 1” layer, the “min_enclosure” and “width” rules of both the via above and the via below “metal 1” must be considered. The programmer of the generic cells must consider all relevant rules to produce a legal layout. Rules are accessed in cell code using the `MappedPDK.get_grule` method.
+
 #### Routing
 Routing utilities are required to create complicated hierarchical designs. At the backend of routing is the gdsfactory “Port” object. Fundamentally, ports describe a polygon edge. Ports include center, width, and orientation of the edge, along with other attributes and utility methods. The glayout routing functions operate to create paths between ports.
 As described with the via stack example above, the checks and sizings necessary for legal layout are executed in the cell generator. Glayout routing functions do not need to understand cell context; for this reason, routing functions are called “dumb routes”. There are three “dumb route” utilities: straight route, L route, and C route. Dumb routes are simple, but contain optional arguments which allow for precise control over created paths. The default path behavior is easy to predict and will generally make the most reasonable decisions if no direction is provided.
@@ -120,6 +158,7 @@ For example, Straight route creates a straight path directly between two ports. 
 ![straight route default behavoir](docs/straight_route_def_beh.png)
 
 L route and C route also create simple paths. L route creates an L shaped route (two straight paths perpendicular) and C route creates a C shaped route (two parallel paths connected by a straight path).
+
 #### PDK Agnostic Hierarchical Cells
 All cells other than the via stack contain hierarchy. Combining hierarchy and careful routing allows for clean layouts while increasing complexity.
 ##### Example 1: [via_array](https://github.com/alibillalhammoud/OpenFASOC/blob/main/openfasoc/generators/gdsfactory-gen/glayout/primitives/via_gen.py#L180)
